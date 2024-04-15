@@ -1,19 +1,28 @@
 {
   "name": "fly-tejas",
   "version": "1.0.0",
-  "description": "",
+  "description": "Tejas is Flying",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "keywords": [],
-  "author": "",
+  "author": "Xcitech Technologies",
   "license": "ISC",
   "dependencies": {
     "commander": "^12.0.0",
     "execa": "^8.0.1",
     "figlet": "^1.7.0",
     "readline": "^1.3.0"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trupnil11/fly-tejas.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trupnil11/fly-tejas/issues"
+  },
+  "homepage": "https://github.com/trupnil11/fly-tejas#readme"
 }
