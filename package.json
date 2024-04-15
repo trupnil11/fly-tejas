@@ -1,6 +1,6 @@
 {
   "name": "fly-tejas",
-  "version": "4.0.0",
+  "version": "4.0.8",
   "description": "Tejas is Flying",
   "main": "index.js",
   "type": "module",
@@ -19,7 +19,6 @@
   "bin": {
     "create": "./index.js"
   },
-  "devDependencies": {},
   "repository": {
     "type": "git",
     "url": "git+https://github.com/trupnil11/fly-tejas.git"

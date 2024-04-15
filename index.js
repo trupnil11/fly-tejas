@@ -2,6 +2,8 @@
 import { program } from 'commander';
 import * as readline from 'readline';
 import figlet from 'figlet';
+import { spawn } from 'child_process';
+import { readFile, writeFile, access } from 'fs/promises';
 
 program
     .version('1.0.0')
@@ -145,6 +147,55 @@ async function promptUserForLogging(message) {
     });
 }
 
+async function cloneRepository(repositoryUrl, destinationPath) {
+    return new Promise((resolve, reject) => {
+        const cloneProcess = spawn('git', ['clone', repositoryUrl, destinationPath]);
+
+        cloneProcess.on('close', (code) => {
+            if (code === 0) {
+                resolve();
+            } else {
+                reject(new Error(`Git clone process exited with code ${code}`));
+            }
+        });
+
+        cloneProcess.on('error', (error) => {
+            reject(error);
+        });
+    });
+}
+
+
+async function updatePackageJson(projectName, projectPort, logRequests, logExceptions) {
+    const packageJsonPath = `${projectName}/package.json`;
+    try {
+        // Check if package.json file exists
+        await access(packageJsonPath); // This will throw an error if the file does not exist
+    } catch (error) {
+        console.error('\x1b[31m%s\x1b[0m', `Error: package.json not found in ${projectName} directory.`);
+        return;
+    }
+    try {
+        // Read the existing package.json file
+        const packageJsonData = await readFile(packageJsonPath, 'utf8');
+        const packageJson = JSON.parse(packageJsonData);
+        // Update package.json fields based on user input
+        packageJson.port = projectPort;
+        packageJson.log = {
+            http_requests: logRequests,
+            exceptions: logExceptions,
+        };
+        packageJson.dir = {
+            "targets": "targets"
+        }
+        // Write the updated package.json back to the file
+        await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
+        console.log('\nUpdated package.json with project configuration.');
+    } catch (error) {
+        console.error('\x1b[31m%s\x1b[0m', 'Error updating package.json:', error);
+    }
+}
+
 async function tejasTakeOff() {
     const projectName = await promptUserForProjectName();
     const ProjectDescription = await promptUserForProjectDescription();
@@ -156,17 +207,26 @@ async function tejasTakeOff() {
     console.log('\nInstalling Project Using "Fly Tejas"...');
     const asciiArt = await displayFigletText('Fly Tejas');
     console.log('\x1b[36m%s\x1b[0m', asciiArt);
-
-    console.log(`
-      \x1b[1mProject Details\x1b[0m
-      - Name: '${projectName}'
-      - Description: '${ProjectDescription}'
-      - Port: '${ProjectPort}'
-      - Database: '${databaseName}'
-      - Log Incoming Requests: '${ForRequest ? 'Yes' : 'No'}'
-      - Log Uncaught Exceptions: '${ForLogging ? 'Yes' : 'No'}'
-      - Module Enabled: '${enableModule ? 'Yes' : 'No'}'
-    `);
+    const repositoryUrl = 'https://github.com/hirakchhatbar/tejas-skeleton';
+    const destinationPath = projectName;
+    try {
+        console.log(`\nCloning repository for ${projectName}...`);
+        await cloneRepository(repositoryUrl, destinationPath);
+        console.log('\nProject setup completed!');
+        console.log(`
+            \x1b[1mProject Details\x1b[0m
+            - Name: '${projectName}'
+            - Description: '${ProjectDescription}'
+            - Port: '${ProjectPort}'
+            - Database: '${databaseName}'
+            - Log Incoming Requests: '${ForLogging ? 'Yes' : 'No'}'
+            - Log Uncaught Exceptions: '${ForRequest ? 'Yes' : 'No'}'
+            - Module Enabled: '${enableModule ? 'Yes' : 'No'}'
+        `);
+        await updatePackageJson(projectName, ProjectPort, ForLogging, ForRequest);
+    } catch (error) {
+        console.error('\x1b[31m%s\x1b[0m', 'Error during project setup:', error);
+    }
 }
 
 tejasTakeOff();
