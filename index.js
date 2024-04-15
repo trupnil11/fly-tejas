@@ -2,15 +2,19 @@
 import { program } from 'commander';
 import * as readline from 'readline';
 import figlet from 'figlet';
-//import execa from 'execa';
 
 program
     .version('1.0.0')
     .option('-p, --project <name>', 'Specify project name')
-    .option('-d, --database <name>', 'Specify database name')
+    .option('-d, --database <name>', 'Specify database name (mongodb/mysql)')
     .option('-m, --module', 'Enable a specific module (true/false)')
+    .option('-r, --log-requests <value>', 'Log incoming requests (yes/no)')
+    .option('-e, --log-exceptions <value>', 'Log uncaught exceptions (yes/no)')
     .parse(process.argv);
+
 const validDatabases = ['mongodb', 'mysql'];
+const validYesValues = ['yes', 'y'];
+const validNoValues = ['no', 'n'];
 
 async function displayFigletText(text) {
     return new Promise((resolve, reject) => {
@@ -34,6 +38,38 @@ async function promptUserForProjectName() {
         });
         return new Promise((resolve) => {
             rl.question('Enter project name: ', (answer) => {
+                rl.close();
+                resolve(answer);
+            });
+        });
+    }
+}
+async function promptUserForProjectDescription() {
+    if (program.project) {
+        return program.project;
+    } else {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+        });
+        return new Promise((resolve) => {
+            rl.question('Enter project Description: ', (answer) => {
+                rl.close();
+                resolve(answer);
+            });
+        });
+    }
+}
+async function promptUserForProjectPort() {
+    if (program.project) {
+        return program.project;
+    } else {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout,
+        });
+        return new Promise((resolve) => {
+            rl.question('Enter project Port: ', (answer) => {
                 rl.close();
                 resolve(answer);
             });
@@ -87,34 +123,50 @@ async function promptUserForModule() {
     }
 }
 
+async function promptUserForLogging(message) {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+
+    return new Promise((resolve) => {
+        rl.question(`${message} (yes/no): `, (answer) => {
+            rl.close();
+            const lowercaseAnswer = answer.trim().toLowerCase();
+            if (validYesValues.includes(lowercaseAnswer)) {
+                resolve(true);
+            } else if (validNoValues.includes(lowercaseAnswer)) {
+                resolve(false);
+            } else {
+                console.log('Invalid input. Please enter "yes" or "no".');
+                resolve(promptUserForLogging(message));
+            }
+        });
+    });
+}
+
 async function tejasTakeOff() {
     const projectName = await promptUserForProjectName();
+    const ProjectDescription = await promptUserForProjectDescription();
+    const ProjectPort = await promptUserForProjectPort();
     const databaseName = await promptUserForDatabaseName();
+    const ForLogging = await promptUserForLogging('Log all incoming requests ?');
+    const ForRequest = await promptUserForLogging('Log uncaught exceptions ?');
     const enableModule = await promptUserForModule();
+    console.log('\nInstalling Project Using "Fly Tejas"...');
     const asciiArt = await displayFigletText('Fly Tejas');
-    console.log('\x1b[3m');
-    console.log(asciiArt);
-    console.log(`Creating project '${projectName}' with database '${databaseName}'( Module:'${enableModule}' )...`);
+    console.log('\x1b[36m%s\x1b[0m', asciiArt);
 
-    //   try {
-    //     // Create a directory
-    //     await execa('mkdir', [projectName]);
-
-    //     // Change directory and initialize a project
-    //     await execa('npm', ['init', '-y'], { cwd: projectName });
-
-    //     // Install dependencies
-    //     await execa('npm', ['install', databaseName], { cwd: projectName });
-
-    //     if (enableModule) {
-    //       // Install a specific module
-    //       await execa('npm', ['install', 'some-module'], { cwd: projectName });
-    //     }
-
-    //     console.log('Project setup completed!');
-    //   } catch (error) {
-    //     console.error('Error:', error);
-    //   }
+    console.log(`
+      \x1b[1mProject Details\x1b[0m
+      - Name: '${projectName}'
+      - Description: '${ProjectDescription}'
+      - Port: '${ProjectPort}'
+      - Database: '${databaseName}'
+      - Log Incoming Requests: '${ForRequest ? 'Yes' : 'No'}'
+      - Log Uncaught Exceptions: '${ForLogging ? 'Yes' : 'No'}'
+      - Module Enabled: '${enableModule ? 'Yes' : 'No'}'
+    `);
 }
 
 tejasTakeOff();
