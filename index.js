@@ -4,7 +4,7 @@ import * as readline from 'readline';
 import figlet from 'figlet';
 import { spawn } from 'child_process';
 import { readFile, writeFile, access } from 'fs/promises';
-
+import * as path from 'path';
 program
     .version('1.0.0')
     .option('-p, --project <name>', 'Specify project name')
@@ -117,7 +117,7 @@ async function promptUserForModule() {
             output: process.stdout,
         });
         return new Promise((resolve) => {
-            rl.question('Enable a specific module? (true/false): ', (answer) => {
+            rl.question('modular structure ? (true/false): ', (answer) => {
                 rl.close();
                 resolve(answer.toLowerCase() === 'true');
             });
@@ -147,9 +147,11 @@ async function promptUserForLogging(message) {
     });
 }
 
-async function cloneRepository(repositoryUrl) {
+async function cloneRepository(repositoryUrl, destinationPath) {
     return new Promise((resolve, reject) => {
-        const cloneProcess = spawn('git', ['clone', repositoryUrl, process.cwd()]);
+        const currentDirectory = process.cwd();
+        console.log(currentDirectory, "current working directory");
+        const cloneProcess = spawn('git', ['clone', repositoryUrl, "."]);
 
         cloneProcess.on('close', (code) => {
             if (code === 0) {
@@ -166,8 +168,8 @@ async function cloneRepository(repositoryUrl) {
 }
 
 
-async function updatePackageJson(packageJsonPath, projectName) {
-
+async function updatePackageJson(projectName) {
+    const packageJsonPath = path.join(process.cwd(), 'package.json');
     try {
         // Check if package.json file exists
         await access(packageJsonPath); // This will throw an error if the file does not exist
@@ -181,6 +183,7 @@ async function updatePackageJson(packageJsonPath, projectName) {
         const packageJson = JSON.parse(packageJsonData);
         // Update package.json fields based on user input
         packageJson.name = projectName;
+
         // Write the updated package.json back to the file
         await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
         console.log('\nUpdated package.json with project configuration.');
@@ -189,8 +192,8 @@ async function updatePackageJson(packageJsonPath, projectName) {
     }
 }
 
-async function updateTejasConfig(tejasConfigPath, projectPort, logRequests, logExceptions) {
-
+async function updateTejasConfig(projectPort, logRequests, logExceptions) {
+    const tejasConfigPath = path.join(process.cwd(), 'tejas.config.json');
     try {
         // Read the existing tejas.config.json file
         const tejasConfigData = await readFile(tejasConfigPath, 'utf8');
@@ -221,10 +224,11 @@ async function tejasTakeOff() {
     const asciiArt = await displayFigletText('Fly Tejas');
     console.log('\x1b[36m%s\x1b[0m', asciiArt);
     const repositoryUrl = 'https://github.com/hirakchhatbar/tejas-skeleton';
-    //const destinationPath = projectName;
+    const destinationPath = process.cwd();
+    console.log(destinationPath);
     try {
         console.log(`\nCloning repository for ${projectName}...`);
-        await cloneRepository(repositoryUrl);
+        await cloneRepository(repositoryUrl, destinationPath);
         console.log('\nProject setup completed!');
         console.log(`
             \x1b[1mProject Details\x1b[0m
@@ -236,15 +240,8 @@ async function tejasTakeOff() {
             - Log Uncaught Exceptions: '${ForRequest ? 'Yes' : 'No'}'
             - Module Enabled: '${enableModule ? 'Yes' : 'No'}'
         `);
-
-        console.log('Current working directory:', process.cwd());
-        const packageJsonPath = `${process.cwd()}/package.json`;
-        const tejasConfigPath = `${process.cwd()}/tejas.config.json`;
-        console.log('Resolved package.json path:', packageJsonPath);
-        console.log('Resolved tejas.config.json path:', tejasConfigPath);
-
-        // await updatePackageJson(packageJsonPath, projectName);
-        //await updateTejasConfig(tejasConfigPath, ProjectPort, ForLogging, ForRequest);
+        await updatePackageJson(projectName);
+        await updateTejasConfig(ProjectPort, ForLogging, ForRequest);
 
     } catch (error) {
         console.error('\x1b[31m%s\x1b[0m', 'Error during project setup:', error);
