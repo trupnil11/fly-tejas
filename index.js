@@ -147,9 +147,9 @@ async function promptUserForLogging(message) {
     });
 }
 
-async function cloneRepository(repositoryUrl, destinationPath) {
+async function cloneRepository(repositoryUrl) {
     return new Promise((resolve, reject) => {
-        const cloneProcess = spawn('git', ['clone', repositoryUrl, destinationPath]);
+        const cloneProcess = spawn('git', ['clone', repositoryUrl, process.cwd()]);
 
         cloneProcess.on('close', (code) => {
             if (code === 0) {
@@ -166,8 +166,8 @@ async function cloneRepository(repositoryUrl, destinationPath) {
 }
 
 
-async function updatePackageJson(projectName, projectPort, logRequests, logExceptions) {
-    const packageJsonPath = `${projectName}/package.json`;
+async function updatePackageJson(packageJsonPath, projectName) {
+
     try {
         // Check if package.json file exists
         await access(packageJsonPath); // This will throw an error if the file does not exist
@@ -180,14 +180,7 @@ async function updatePackageJson(projectName, projectPort, logRequests, logExcep
         const packageJsonData = await readFile(packageJsonPath, 'utf8');
         const packageJson = JSON.parse(packageJsonData);
         // Update package.json fields based on user input
-        packageJson.port = projectPort;
-        packageJson.log = {
-            http_requests: logRequests,
-            exceptions: logExceptions,
-        };
-        packageJson.dir = {
-            "targets": "targets"
-        }
+        packageJson.name = projectName;
         // Write the updated package.json back to the file
         await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
         console.log('\nUpdated package.json with project configuration.');
@@ -195,6 +188,26 @@ async function updatePackageJson(projectName, projectPort, logRequests, logExcep
         console.error('\x1b[31m%s\x1b[0m', 'Error updating package.json:', error);
     }
 }
+
+async function updateTejasConfig(tejasConfigPath, projectPort, logRequests, logExceptions) {
+
+    try {
+        // Read the existing tejas.config.json file
+        const tejasConfigData = await readFile(tejasConfigPath, 'utf8');
+        const tejasConfig = JSON.parse(tejasConfigData);
+
+        // Update tejas.config.json fields
+        tejasConfig.port = projectPort;
+        tejasConfig.log = { http_requests: logRequests, exceptions: logExceptions };
+        tejasConfig.dir = { targets: 'targets' }; // Add or modify additional fields as needed
+
+        // Write the updated tejas.config.json back to the file
+        await writeFile(tejasConfigPath, JSON.stringify(tejasConfig, null, 2));
+    } catch (error) {
+        console.error('\x1b[31m%s\x1b[0m', `Error updating tejas.config.json:`, error);
+    }
+}
+
 
 async function tejasTakeOff() {
     const projectName = await promptUserForProjectName();
@@ -208,10 +221,10 @@ async function tejasTakeOff() {
     const asciiArt = await displayFigletText('Fly Tejas');
     console.log('\x1b[36m%s\x1b[0m', asciiArt);
     const repositoryUrl = 'https://github.com/hirakchhatbar/tejas-skeleton';
-    const destinationPath = projectName;
+    //const destinationPath = projectName;
     try {
         console.log(`\nCloning repository for ${projectName}...`);
-        await cloneRepository(repositoryUrl, destinationPath);
+        await cloneRepository(repositoryUrl);
         console.log('\nProject setup completed!');
         console.log(`
             \x1b[1mProject Details\x1b[0m
@@ -223,7 +236,16 @@ async function tejasTakeOff() {
             - Log Uncaught Exceptions: '${ForRequest ? 'Yes' : 'No'}'
             - Module Enabled: '${enableModule ? 'Yes' : 'No'}'
         `);
-        await updatePackageJson(projectName, ProjectPort, ForLogging, ForRequest);
+
+        console.log('Current working directory:', process.cwd());
+        const packageJsonPath = `${process.cwd()}/package.json`;
+        const tejasConfigPath = `${process.cwd()}/tejas.config.json`;
+        console.log('Resolved package.json path:', packageJsonPath);
+        console.log('Resolved tejas.config.json path:', tejasConfigPath);
+
+        // await updatePackageJson(packageJsonPath, projectName);
+        //await updateTejasConfig(tejasConfigPath, ProjectPort, ForLogging, ForRequest);
+
     } catch (error) {
         console.error('\x1b[31m%s\x1b[0m', 'Error during project setup:', error);
     }
