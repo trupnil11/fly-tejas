@@ -1,174 +1,76 @@
 #!/usr/bin/env node
-import { program } from 'commander';
-import * as readline from 'readline';
+import inquirer from 'inquirer';
 import figlet from 'figlet';
 import { spawn } from 'child_process';
-import { readFile, writeFile, access } from 'fs/promises';
-import * as path from 'path';
-program
-    .version('1.0.0')
-    .option('-p, --project <name>', 'Specify project name')
-    .option('-d, --database <name>', 'Specify database name (mongodb/mysql)')
-    .option('-m, --module', 'Enable a specific module (true/false)')
-    .option('-r, --log-requests <value>', 'Log incoming requests (yes/no)')
-    .option('-e, --log-exceptions <value>', 'Log uncaught exceptions (yes/no)')
-    .parse(process.argv);
+import { readFile, writeFile, access, rm } from 'fs/promises';
+import path from 'path';
 
-const validDatabases = ['mongodb', 'mysql'];
-const validYesValues = ['yes', 'y'];
-const validNoValues = ['no', 'n'];
 
-async function displayFigletText(text) {
+async function displayAsciiArt(text) {
     return new Promise((resolve, reject) => {
         figlet(text, (err, data) => {
-            if (err) {
-                reject(err);
-            } else {
-                resolve(data);
+            if (err) reject(err);
+            else resolve(data);
+        });
+    });
+}
+
+async function promptUser() {
+    const answers = await inquirer.prompt([
+        { name: 'projectName', message: 'Enter project name:' },
+        { name: 'projectDescription', message: 'Enter project description:' },
+        {
+            name: 'projectPort',
+            message: 'Port to run app on:',
+            default: '1403',
+            validate: input => {
+                const port = parseInt(input);
+                return port >= 0 && port <= 65535; // Validate port range
             }
-        });
-    });
-}
+        },
+        {
+            name: 'logRequests',
+            type: 'confirm',
+            message: 'Log all incoming requests?',
+            default: true
+        },
+        {
+            name: 'logExceptions',
+            type: 'confirm',
+            message: 'Log uncaught exceptions?',
+            default: true
+        },
+        {
+            name: 'useMongoDB',
+            type: 'confirm',
+            message: 'Want to use inbuilt MongoDB ?',
+            default: false
+        },
+        {
+            name: 'mongoDBUrl',
+            message: 'Enter MongoDB connection URL:',
+            when: answers => answers.useMongoDB // Only ask if useMongoDB is true
+        }
+    ]);
 
-async function promptUserForProjectName() {
-    if (program.project) {
-        return program.project;
-    } else {
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-        });
-        return new Promise((resolve) => {
-            rl.question('Enter project name: ', (answer) => {
-                rl.close();
-                resolve(answer);
-            });
-        });
-    }
-}
-async function promptUserForProjectDescription() {
-    if (program.project) {
-        return program.project;
-    } else {
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-        });
-        return new Promise((resolve) => {
-            rl.question('Enter project Description: ', (answer) => {
-                rl.close();
-                resolve(answer);
-            });
-        });
-    }
-}
-async function promptUserForProjectPort() {
-    if (program.project) {
-        return program.project;
-    } else {
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-        });
-        return new Promise((resolve) => {
-            rl.question('Enter project Port: ', (answer) => {
-                rl.close();
-                resolve(answer);
-            });
-        });
-    }
-}
-async function promptUserForDatabaseName() {
-    if (program.database && validDatabases.includes(program.database)) {
-        return program.database;
-    }
-
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-    });
-
-    return new Promise((resolve) => {
-        console.log('Select database:');
-        validDatabases.forEach((db, index) => {
-            console.log(`${index + 1}. ${db}`);
-        });
-
-        rl.question('Enter database number: ', (answer) => {
-            rl.close();
-            const selectedDatabase = validDatabases[parseInt(answer) - 1];
-            if (selectedDatabase && validDatabases.includes(selectedDatabase)) {
-                resolve(selectedDatabase);
-            } else {
-                console.log('Invalid database selection. Please choose a valid option.');
-                resolve(promptUserForDatabaseName());
-            }
-        });
-    });
-}
-
-
-async function promptUserForModule() {
-    if (program.module !== undefined) {
-        return program.module;
-    } else {
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-        });
-        return new Promise((resolve) => {
-            rl.question('modular structure ? (true/false): ', (answer) => {
-                rl.close();
-                resolve(answer.toLowerCase() === 'true');
-            });
-        });
-    }
-}
-
-async function promptUserForLogging(message) {
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-    });
-
-    return new Promise((resolve) => {
-        rl.question(`${message} (yes/no): `, (answer) => {
-            rl.close();
-            const lowercaseAnswer = answer.trim().toLowerCase();
-            if (validYesValues.includes(lowercaseAnswer)) {
-                resolve(true);
-            } else if (validNoValues.includes(lowercaseAnswer)) {
-                resolve(false);
-            } else {
-                console.log('Invalid input. Please enter "yes" or "no".');
-                resolve(promptUserForLogging(message));
-            }
-        });
-    });
+    return answers;
 }
 
 async function cloneRepository(repositoryUrl, destinationPath) {
     try {
-        // Check if destination directory exists
         await access(destinationPath);
-        // If the directory exists, throw an error
         throw new Error(`Destination path '${destinationPath}' already exists.`);
     } catch (error) {
-        // If the error is 'ENOENT' (directory does not exist), continue with cloning
         if (error.code !== 'ENOENT') {
-            throw error; // Rethrow unexpected error
+            throw error;
         }
     }
 
     return new Promise((resolve, reject) => {
-        // const currentDirectory = process.cwd();
         const cloneProcess = spawn('git', ['clone', repositoryUrl, destinationPath]);
         cloneProcess.on('close', (code) => {
-            if (code === 0) {
-                resolve();
-            } else {
-                reject(new Error(`Git clone process exited with code ${code}`));
-            }
+            if (code === 0) resolve();
+            else reject(new Error(`Git clone process exited with code ${code}`));
         });
         cloneProcess.on('error', (error) => {
             reject(error);
@@ -176,79 +78,87 @@ async function cloneRepository(repositoryUrl, destinationPath) {
     });
 }
 
-
 async function updatePackageJson(projectName) {
-
     const packageJsonPath = path.join(projectName, 'package.json');
-    //const packageJsonPath = path.join(process.cwd(), 'package.json');
     try {
-        // Check if package.json file exists
-        await access(packageJsonPath); // This will throw an error if the file does not exist
-    } catch (error) {
-        console.error('\x1b[31m%s\x1b[0m', `Error: package.json not found in ${projectName} directory.`);
-        return;
-    }
-    try {
+        await access(packageJsonPath);
         const packageJsonData = await readFile(packageJsonPath, 'utf8');
         const packageJson = JSON.parse(packageJsonData);
         packageJson.name = projectName;
         await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
         console.log('\nUpdated package.json with project configuration.');
     } catch (error) {
-        console.error('\x1b[31m%s\x1b[0m', 'Error updating package.json:', error);
+        console.error('\x1b[31m%s\x1b[0m', `Error updating package.json:`, error);
     }
 }
-
-async function updateTejasConfig(projectName, projectPort, logRequests, logExceptions) {
+async function updateTejasConfig(projectName, projectPort, logRequests, logExceptions, useMongoDB, mongoDBUrl) {
     const tejasConfigPath = path.join(projectName, 'tejas.config.json');
     try {
         const tejasConfigData = await readFile(tejasConfigPath, 'utf8');
         const tejasConfig = JSON.parse(tejasConfigData);
+
+        // Update common configurations
         tejasConfig.port = projectPort;
         tejasConfig.log = { http_requests: logRequests, exceptions: logExceptions };
         tejasConfig.dir = { targets: 'targets' }; // Add or modify additional fields as needed
+
+        // Update MongoDB configuration if useMongoDB is true and mongoDBUrl is provided
+        if (useMongoDB && mongoDBUrl) {
+            tejasConfig.db = {
+                type: 'mongodb',
+                uri: mongoDBUrl
+            };
+        }
+
         await writeFile(tejasConfigPath, JSON.stringify(tejasConfig, null, 2));
+        console.log('\nUpdated tejas.config.json with project configuration.');
     } catch (error) {
         console.error('\x1b[31m%s\x1b[0m', `Error updating tejas.config.json:`, error);
     }
 }
 
+async function setupProject() {
+    console.log('Welcome to Project Setup\n');
 
-async function tejasTakeOff() {
-    const projectName = await promptUserForProjectName();
-    const ProjectDescription = await promptUserForProjectDescription();
-    const ProjectPort = await promptUserForProjectPort();
-    const databaseName = await promptUserForDatabaseName();
-    const ForLogging = await promptUserForLogging('Log all incoming requests ?');
-    const ForRequest = await promptUserForLogging('Log uncaught exceptions ?');
-    const enableModule = await promptUserForModule();
-    console.log('\nInstalling Project Using "Fly Tejas"...');
-    const asciiArt = await displayFigletText('Fly Tejas');
+    const projectDetails = await promptUser();
+
+    console.log('\nInstalling Project using "Fly Tejas"...');
+    const asciiArt = await displayAsciiArt('Fly Tejas');
     console.log('\x1b[36m%s\x1b[0m', asciiArt);
-    const repositoryUrl = 'https://github.com/hirakchhatbar/tejas-skeleton';
-    const destinationPath = projectName;
-    //const destinationPath = process.cwd();
-    console.log(destinationPath);
-    try {
-        console.log(`\nCloning repository for ${projectName}...`);
-        await cloneRepository(repositoryUrl, destinationPath);
-        console.log('\nProject setup completed!');
-        console.log(`
-            \x1b[1mProject Details\x1b[0m
-            - Name: '${projectName}'
-            - Description: '${ProjectDescription}'
-            - Port: '${ProjectPort}'
-            - Database: '${databaseName}'
-            - Log Incoming Requests: '${ForLogging ? 'Yes' : 'No'}'
-            - Log Uncaught Exceptions: '${ForRequest ? 'Yes' : 'No'}'
-            - Module Enabled: '${enableModule ? 'Yes' : 'No'}'
-        `);
-        await updatePackageJson(projectName);
-        await updateTejasConfig(projectName, ProjectPort, ForLogging, ForRequest);
 
+    const repositoryUrl = 'https://github.com/hirakchhatbar/tejas-skeleton';
+    const destinationPath = projectDetails.projectName;
+
+    try {
+        console.log(`\'${projectDetails.projectName}' Preparing for takeoff... 🚀`);
+        await cloneRepository(repositoryUrl, destinationPath);
+        // Remove the .git directory (if it exists) after cloning
+        const gitDirPath = path.join(destinationPath, '.git');
+        await rm(gitDirPath, { recursive: true, force: true });
+
+        console.log('\nProject take off...🚀');
+        console.log(`
+        \x1b[1mProject Details\x1b[0m
+        - Name: '${projectDetails.projectName}'
+        - Description: '${projectDetails.projectDescription}'
+        - Port: '${projectDetails.projectPort}'
+        - Log Incoming Requests: '${projectDetails.logRequests ? 'Yes' : 'No'}'
+        - Log Uncaught Exceptions: '${projectDetails.logExceptions ? 'Yes' : 'No'}'
+        ${projectDetails.useMongoDB ? `- MongoDB Connection URL: '${projectDetails.mongoDBUrl}'` : ''}
+    `);
+        await updatePackageJson(projectDetails.projectName);
+        await updateTejasConfig(
+            projectDetails.projectName,
+            projectDetails.projectPort,
+            projectDetails.logRequests,
+            projectDetails.logExceptions,
+            projectDetails.useMongoDB,
+            projectDetails.mongoDBUrl
+        );
+        // Other setup tasks...
     } catch (error) {
         console.error('\x1b[31m%s\x1b[0m', 'Error during project setup:', error);
     }
 }
 
-tejasTakeOff();
+setupProject();
